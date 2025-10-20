@@ -43,9 +43,11 @@ abstract class BaseKeystoreInterceptor : BinderInterceptor() {
     protected open fun setupInterceptor(service: IBinder, backdoor: IBinder): Boolean {
         keystore = service
         Logger.i("Registering for $serviceName: $keystore")
-        
+        // 注册当前拦截器例如 Keystore2Interceptor
         registerBinderInterceptor(backdoor, service, this)
+        // 建立一个 Binder 死亡监听 机制，来监控keystore是否死亡 死亡后直接退出程序重启进程
         service.linkToDeath(createDeathRecipient(), 0)
+        // 设置keystore拦截器
         onInterceptorSetup(service, backdoor)
         
         return true

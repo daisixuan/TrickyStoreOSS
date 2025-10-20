@@ -29,7 +29,7 @@ fun main(args: Array<String>) {
 
 private fun initializeInterceptors() {
     val interceptor = selectKeystoreInterceptor()
-    
+    // 这里执行 injectionCommand
     while (!interceptor.tryRunKeystoreInterceptor()) {
         Logger.d("Retrying interceptor initialization...")
         Thread.sleep(RETRY_DELAY_MS)

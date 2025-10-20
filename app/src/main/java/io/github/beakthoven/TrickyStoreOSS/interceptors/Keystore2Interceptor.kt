@@ -74,6 +74,11 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
         callingPid: Int,
         data: Parcel
     ): Result {
+        // return
+        // Skip 不执行原始事务
+        // OverrideReply 读取自定义响应直接返回给应用
+        // createTypedObjectReply 读取修改后的请求数据 继续执行事务
+        // Continue 使用原始请求数据继续执行原始事务
         if (code == getKeyEntryTransaction) {
             if (KeyBoxUtils.hasKeyboxes()) {
                 Logger.d("intercept pre  $target uid=$callingUid pid=$callingPid dataSz=${data.dataSize()}")
@@ -135,6 +140,7 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
         Logger.d("intercept post $target uid=$callingUid pid=$callingPid dataSz=${data.dataSize()} replySz=${reply.dataSize()}")
 
         if (code == deleteKeyTransaction && resultCode == 0) {
+            // 删除证书
             data.enforceInterface("android.system.keystore2.IKeystoreService")
 
             val keyDescriptor = data.readTypedObject(KeyDescriptor.CREATOR)
@@ -145,6 +151,7 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
             return Skip
         } else if (code == getKeyEntryTransaction) {
             try {
+                // 返回证书链
                 data.enforceInterface("android.system.keystore2.IKeystoreService")
                 val response = reply.readTypedObject(KeyEntryResponse.CREATOR)
                 if (response != null) {

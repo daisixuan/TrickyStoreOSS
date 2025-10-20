@@ -274,7 +274,7 @@ static std::optional<uintptr_t> remote_dlopen(int pid, struct user_regs_struct &
 
     uintptr_t remote_info = push_memory(pid, regs, &dlext_info, sizeof(dlext_info));
     uintptr_t remote_path = push_string(pid, regs, lib_path);
-
+    // 代码构造了一个 android_dlextinfo 结构体来指定特殊的加载方式 不要通过文件路径打开库,而是使用已经打开的文件描述符
     std::vector<uintptr_t> args = {remote_path, RTLD_NOW, remote_info};
     uintptr_t remote_handle = remote_call(pid, regs, reinterpret_cast<uintptr_t>(dlopen_addr), libc_return_addr, args);
 
@@ -287,7 +287,7 @@ static std::optional<uintptr_t> remote_dlopen(int pid, struct user_regs_struct &
     LOGD("Successfully loaded library with handle: %p", reinterpret_cast<void *>(remote_handle));
     return remote_handle;
 }
-
+// 使用dlsym找到在目标进程中加载so后的entry函数
 static std::optional<uintptr_t> remote_find_entry(int pid, struct user_regs_struct &regs, const std::vector<lsplt::MapInfo> &local_map,
                                                   const std::vector<lsplt::MapInfo> &remote_map, uintptr_t remote_handle,
                                                   uintptr_t libc_return_addr) {
@@ -390,14 +390,16 @@ bool inject_library(int pid, const char *lib_path, const char *entry_name) {
         return false;
     }
     LOGD("Found libc return address: %p", libc_return_addr);
-
+    // 通过 Unix socket 传输文件描述符的方式是一种标准的进程间文件共享技术。
+    // 它允许注入器在不需要远程进程自己打开文件的情况下,将已打开的文件描述符传递给目标进程,这对于注入场景特别有用,因为目标进程可能没有权限直接访问注入库文件
+    // 拿到libTrickyStoreOSS.so 的fd 给libc的android_dlopen_ext使用
     auto lib_fd_opt = transfer_fd_to_remote(pid, lib_path, current_regs, local_map, remote_map);
     if (!lib_fd_opt) {
         LOGE("Failed to transfer library fd to remote process");
         return false;
     }
     int lib_fd = *lib_fd_opt;
-
+    // 注入程序中 用android_dlopen_ext打开lib_path 的 handle
     auto handle_opt =
         remote_dlopen(pid, current_regs, local_map, remote_map, lib_fd, lib_path, reinterpret_cast<uintptr_t>(libc_return_addr));
     if (!handle_opt) {
@@ -421,7 +423,7 @@ bool inject_library(int pid, const char *lib_path, const char *entry_name) {
         return false;
     }
     uintptr_t entry_addr = *entry_opt;
-
+    // 调用entry函数
     if (!remote_call_entry(pid, current_regs, entry_addr, remote_handle, reinterpret_cast<uintptr_t>(libc_return_addr))) {
         LOGE("Failed to call entry point");
         return false;

@@ -34,7 +34,9 @@ open class BinderInterceptor : Binder() {
         private const val RESULT_CONTINUE = 2
         private const val RESULT_OVERRIDE_REPLY = 3
         private const val RESULT_OVERRIDE_DATA = 4
-        
+
+        // 该方法通过向目标 Binder 发送特殊的事务码 0xdeadbeef 来请求 backdoor 访问
+        // 如果目标进程已经被注入了 libTrickyStoreOSS.so,它会识别这个特殊事务码并返回 backdoor Binder 对象
         fun getBinderBackdoor(binder: IBinder): IBinder? {
             val data = Parcel.obtain()
             val reply = Parcel.obtain()
@@ -98,7 +100,7 @@ open class BinderInterceptor : Binder() {
         reply: Parcel?, 
         resultCode: Int
     ): Result = Skip
-
+    // 负责和BinderInterceptor::handleInterceptedTransaction通信
     override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
         val result = when (code) {
             PRE_TRANSACT_CODE -> handlePreTransact(data)

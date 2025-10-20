@@ -11,5 +11,9 @@ else
     echo "Error: Neither classes.dex nor service.apk found in $MODDIR"
     exit 1
 fi
-
+# 使用 系统的 app_process 工具启动 JVM进程
+# -Djava.class.path= 设置 JVM 的类路径
+# $MODDIR 是app_process的第一个参数
+# --nice-name 这是进程名字
+# io.github.beakthoven.TrickyStoreOSS.MainKt 执行的主类名 JVM会加载这个类执行他的main函数
 exec /system/bin/app_process -Djava.class.path="$CLASSPATH" "$MODDIR" --nice-name=TrickyStoreOSS io.github.beakthoven.TrickyStoreOSS.MainKt

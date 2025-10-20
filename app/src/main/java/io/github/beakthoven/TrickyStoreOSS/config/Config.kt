@@ -109,6 +109,7 @@ object PkgConfig {
     }
 
     fun initialize() {
+        // 并读取用户自定义配置
         root.mkdirs()
         val scope = File(root, TARGET_FILE)
         if (scope.exists()) {

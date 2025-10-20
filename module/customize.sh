@@ -38,14 +38,14 @@ else
 fi
 ui_print ""
 
-# --- Helper to install files ---
+# --- Helper to install files --- 中提取单个文件到指定的目录
 install_file() {
   if ! unzip -qqjo "$ZIPFILE" "$1" -d "$2"; then
     abort "! Failed to extract $1"
   fi
   ui_print "- Extracted $1"
 }
-
+# 将zip中的文件都解压到Module目录中
 # --- Installation ---
 ui_print "- Extracting module files"
 for file in customize.sh module.prop post-fs-data.sh service.sh sepolicy.rule daemon; do

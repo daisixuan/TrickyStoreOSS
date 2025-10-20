@@ -70,6 +70,9 @@ class SecurityLevelInterceptor(
         callingPid: Int,
         data: Parcel
     ): Result {
+        // return
+        // Skip 不执行原始事务
+        // OverrideReply 读取自定义响应直接返回给应用
         if (code == generateKeyTransaction) {
             Logger.i("intercept key gen uid=$callingUid pid=$callingPid")
             kotlin.runCatching {
