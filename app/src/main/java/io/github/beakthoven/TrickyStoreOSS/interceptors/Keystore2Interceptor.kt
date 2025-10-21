@@ -75,7 +75,7 @@ object Keystore2Interceptor : BaseKeystoreInterceptor() {
         data: Parcel
     ): Result {
         // return
-        // Skip 不执行原始事务
+        // Skip 拦截器不处理这个事务 让事务正常执行
         // OverrideReply 读取自定义响应直接返回给应用
         // createTypedObjectReply 读取修改后的请求数据 继续执行事务
         // Continue 使用原始请求数据继续执行原始事务

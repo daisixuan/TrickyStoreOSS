@@ -168,10 +168,10 @@ bool processBinderTransaction(binder_transaction_data *transaction_data) {
 
     if (should_intercept) {
         LOGD("Redirecting transaction through stub");
-        // 将事务的目标从原始 Keystore 服务改为 g_binder_stub
-        // target.ptr: 指向 stub 的弱引用
-        // cookie: 指向 stub 对象本身
-        // code: 改为 backdoor 魔术数字,让 stub 知道这是被拦截的事务
+//         将事务的目标从原始 Keystore 服务改为 g_binder_stub
+//         target.ptr: 指向 stub 的弱引用
+//         cookie: 指向 stub 对象本身
+//         code: 改为 backdoor 魔术数字,让 stub 知道这是被拦截的事务
         transaction_data->target.ptr = reinterpret_cast<uintptr_t>(g_binder_stub->getWeakRefs());
         transaction_data->cookie = reinterpret_cast<uintptr_t>(g_binder_stub.get());
         transaction_data->code = intercept_constants::kBackdoorCode;
@@ -389,7 +389,7 @@ bool BinderInterceptor::handleInterceptedTransaction(sp<BBinder> target_binder, 
     LOGD("Pre-transaction action type: %d", pre_action_type);
 
     switch (pre_action_type) {
-        // 不执行原始事务 结束
+        // 拦截器不处理这个事务 让事务正常执行
     case intercept_constants::kActionSkip:
         return false;
 
