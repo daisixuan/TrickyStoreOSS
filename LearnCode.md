@@ -246,6 +246,88 @@ allow crash_dump keystore process *
             - 构造SecurityLevelInterceptor为strongBox拦截器
             - registerBinderInterceptor 注册strongBox Binder的拦截器
 
-## 8.拦截器解析
+## 8.Java流程 源码拦截器解析
   - 8.1 Keystore2Interceptor
+    - onPreTransact
+      - getKeyEntry
+        - 需要有keybox如果没有则执行原始服务流程
+        - 验证是这个接口 android.system.keystore2.IKeystoreService
+        - 读取native传来的数据 descriptor
+        - 根据uid和配置判断需要Generate模式还是Hack模式
+          - 读取tee状态
+          - Generate
+            - 配置指定了生成则Generate
+            - 如果是自动模式 tee损坏了则Generate
+            - SecurityLevelInterceptor.getKeyResponse
+              - 返回不为空则 让native读取返回的数据 继续执行事务
+                - 需要应用先生成generateKey才能getKeyEntry 主要逻辑在generateKey 这里只是把生成存好的值返回
+              - 返回为空则 让native直接返回空给应用
+          - Hack
+            - 配置指定了Hack则Hack
+            - 如果是自动模式 tee没损坏则Hack
+            - SecurityLevelInterceptor.shouldSkipLeafHack
+              - 返回是否需要跳过tee证书修改
+                - 主要逻辑判断在generateKey
+              - true则为返回生成的证书
+              - false则为执行tee证书修改
+            - SecurityLevelInterceptor.getKeyResponse
+              - 逻辑同上
+    - onPostTransact
+      - deleteKey
+        - 删除生成的证书
+      - getKeyEntry
+        - CertificateUtils.run { response.getCertificateChain() } 生成证书链
+        - hackCertificateChain 篡改证书链
+          - 用于修改现有的证书链以绕过 Android 硬件密钥认证。它接收一个证书链数组作为参数,提取叶证书中的 Google 硬件认证扩展,修改其中的 Root of Trust 数据,然后使用 keybox 中的私钥重新签名,最终返回修改后的证书链
+          - 通过修改真实 TEE 生成的证书链中的 Root of Trust 数据,使得应用认为设备的 bootloader 是锁定状态,从而绕过硬件认证检查
+        - response.putCertificateChain(newChain).getOrThrow() 放入原数据
+        - 返回
   - 8.2 SecurityLevelInterceptor
+    - 这个函数生成的数据会被 Keystore2Interceptor 在后续的 getKeyEntry 请求中使用
+    - onPreTransact
+      - generateKey
+        - 根据配置决定是否生成合成证书来替代真实的 TEE 生成过程
+          - KeyDescriptor: 密钥描述符,包含密钥别名等信息
+          - attestationKeyDescriptor: 认证密钥描述符(可选)
+          - params: 密钥参数数组
+          - flags 和 entropy: 其他生成参数
+        - needGenerate
+          - 调用 CertificateHacker.generateKeyPair() 生成密钥对和证书链
+          - 将生成的密钥对存储到 keyPairs HashMap 中
+          - 使用 buildResponse() 构建完整的 KeyEntryResponse
+          - 将响应存储到 keys HashMap 中
+          - 返回 OverrideReply,直接响应给调用者,跳过真实的系统服务调用
+        - needHack
+          - 认证密钥场景 (purpose 包含 7 或使用了 attestationKeyDescriptor)
+            - 生成完整的密钥对和证书链
+            - 存储到 keyPairs 和 keys
+            - **关键** 设置 skipLeafHacks 标志为 true,表示后续的 getKeyEntry 请求应该跳过叶证书修改
+            - 返回 OverrideReply, 直接响应给调用者,跳过真实的系统服务调用
+          - 非认证密钥场景
+            - 清除该密钥的 skipLeafHacks 标志
+            - 返回 Skip,让请求继续传递到真实的系统服务
+
+
+## 总结
+
+TrickyStoreOSS模块是一个复杂的系统级修改工具，主要用于拦截和修改Android系统中的KeyStore服务。该模块通过以下关键步骤运作：
+
+1. **初始化阶段**：通过customize.sh脚本判断环境、解压文件、设置权限并创建必要的配置文件夹。
+
+2. **权限配置**：通过sepolicy.rule设置必要的SELinux权限，允许KeyStore服务与系统文件交互。
+
+3. **启动机制**：service.sh确保daemon脚本持续运行，daemon脚本又启动Java代码。
+
+4. **核心工作原理**：
+   - **注入技术**：使用ptrace将libTrickyStoreOSS.so注入到KeyStore服务进程中
+   - **Binder拦截**：通过hook libbinder.so的ioctl函数拦截Binder通信
+   - **两种工作模式**：
+     - Generate模式：在TEE损坏情况下生成合成证书
+     - Hack模式：在TEE正常情况下修改现有证书链的Root of Trust数据
+
+5. **关键功能**：
+   - 为需要硬件密钥认证的应用提供模拟证书
+   - 修改证书链使应用认为设备的bootloader处于锁定状态
+   - 通过backdoor机制在Java和Native层之间建立通信桥梁
+
+这个模块展示了高级Android系统修改的多层次架构，包括Native注入、Binder通信拦截和Java层服务修改，主要目的是在不同的系统环境下绕过Android硬件密钥认证机制。
